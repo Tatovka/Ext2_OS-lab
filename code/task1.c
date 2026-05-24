@@ -80,7 +80,9 @@ signed main(int argc, char** argv) {
     printf("INODE BLOCK TREE\n");
     for (int i = 0; i < 15; ++i) {
         print_tree(&metadata, root.children[i], 0, &fsData);
+        free_tree(root.children[i], fsData.block_size);
     }
-
+    free(root.children);
+    
     return 0;
 }

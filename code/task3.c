@@ -48,5 +48,6 @@ signed main(int argc, char** argv) {
         entryHead += entryLen;
     }
     fclose(file);
+    free(buf);
     return 0;
 }

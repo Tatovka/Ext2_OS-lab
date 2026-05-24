@@ -1,5 +1,6 @@
 #include "utils.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -76,6 +77,11 @@ signed main(int argc, char** argv) {
         readBytes += cnt;
     }
 
+    for (int i = 0; i < 15; ++i) {
+        free_tree(root.children[i], fsData.block_size);
+    }
+    free(root.children);
+    free(buf);
     close(fs);
     return 0;
 }

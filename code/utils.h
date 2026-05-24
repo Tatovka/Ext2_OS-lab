@@ -16,7 +16,9 @@ struct ext2 {
     int inode_size;
 };
 #define DIRECT_PTRS 12
-struct inode {
+
+struct __attribute__((packed))
+inode {
     short mode;
     short uid;
     int size_low;
@@ -51,8 +53,8 @@ struct inode {
 #define DESC_SIZE 32
 
 struct ext2 get_fs_data(int fs) {
-    char sbData[SB_LEN];
-    int cnt = pread(fs, sbData, 1024, SB_LOC);
+    static char sbData[SB_LEN];
+    int cnt = pread(fs, sbData, SB_LEN, SB_LOC);
 
     if (cnt < 0) {
         perror("failed to read superblock");
@@ -85,8 +87,8 @@ int inode_index(int inode, struct ext2* fsData) {
 //starting block of inode table in the given block group
 int group_inode_table(int group, int fs, struct ext2 fsData) {
     int desc_table_loc = (fsData.block_size == 1024) ? 2048 : fsData.block_size;
-    char descData[SB_LEN];
-    pread(fs, descData, 1024, desc_table_loc + group * DESC_SIZE);
+    static char descData[DESC_SIZE];
+    pread(fs, descData, DESC_SIZE, desc_table_loc + group * DESC_SIZE);
     return ((int*) descData)[2];
 }
 
@@ -98,13 +100,14 @@ struct block_tree {
 };
 
 struct block_tree* get_tree(int level, int block, int fs, const struct ext2* fsData) {
+    if (block == 0 && level) return NULL;
+    //block == 0 && level == 0 --- sparse file null block
     struct block_tree* node = (struct block_tree*) calloc(1, sizeof(struct block_tree));
     node->block = block;
     if (level == 0) { //direct
         *node = (struct block_tree){1, block, NULL};
         return node;
     }
-    if (block == 0) return NULL;
 
     node->isDirect = 0;
     node->children = (struct block_tree**) calloc(fsData->block_size, sizeof(struct block_tree*));
@@ -116,7 +119,7 @@ struct block_tree* get_tree(int level, int block, int fs, const struct ext2* fsD
     for (int i = 0; i < fsData->block_size / sizeof(int); i++) {
         node->children[i] = get_tree(level - 1, blockData[i], fs, fsData);
     }
-
+    free(blockData);
     return node;
 }
 
@@ -130,6 +133,17 @@ struct block_tree get_block_tree(const struct inode* inode, int fs, struct ext2*
     firstLayer[14] = get_tree(3, inode->indirect3, fs, fsData);
     struct block_tree root = {0, 0, firstLayer};
     return root;
+}
+
+void free_tree(struct block_tree* root, int blockSz) {
+    if (root == NULL) return;
+    if (!root->isDirect) {
+        for (int i = 0; i < blockSz; ++i) {
+            free_tree(root->children[i], blockSz);
+        }
+        free(root->children);
+    }
+    free(root);
 }
 
 #define BLOCK_GROUP_CNT(d) (d.block_cnt / d.blocks_per_group)
