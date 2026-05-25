@@ -1,5 +1,6 @@
 #include "utils.h"
 #include <time.h>
+#include <endian.h>
 
 void print_inode(const struct inode *node) {
     printf("========== INODE INFO (Number: %d) ==========\n", node->number);
@@ -42,12 +43,12 @@ void print_inode(const struct inode *node) {
 
 static ll printed_bytes = 0;
 void print_tree(struct inode* inode, struct block_tree* root, int level, const struct ext2* fsData) {
-    
     if (root == NULL) {
         return;
     }
 
     static const char* padding[] = {"├──", "│   ├", "│   │   ├", "│   │   │   ├"};
+
     if (printed_bytes < inode->size) {
         printf("%s%u\n", padding[level], (uint)root->block);
     }
@@ -62,7 +63,7 @@ void print_tree(struct inode* inode, struct block_tree* root, int level, const s
     }
 }
 
-signed main(int argc, char** argv) {
+int main(int argc, char** argv) {
     char* fsPath = argv[1];
     int inode = atoi(argv[2]);
     int fs = open(fsPath, O_RDONLY);
@@ -75,13 +76,14 @@ signed main(int argc, char** argv) {
     struct inode metadata = get_inode(inode, fs, fsData);
     struct block_tree root = get_block_tree(&metadata, fs, &fsData);
     close(fs);
-    print_inode(&metadata);
 
+    print_inode(&metadata);
     printf("INODE BLOCK TREE\n");
     for (int i = 0; i < 15; ++i) {
         print_tree(&metadata, root.children[i], 0, &fsData);
         free_tree(root.children[i], fsData.block_size);
     }
+    
     free(root.children);
     
     return 0;

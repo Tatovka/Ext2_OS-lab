@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <unistd.h>
 
-signed main(int argc, char** argv) {
+int main(int argc, char** argv) {
     char* filePath = argv[1];
     
     FILE* file = fopen(filePath, "rb");
@@ -14,11 +14,16 @@ signed main(int argc, char** argv) {
         perror("unable to open file");
         return 1;
     }
+
     fseek(file, 0, SEEK_END);
     int filesz = ftell(file);
     fseek(file, 0, SEEK_SET);
 
     char* buf = malloc(filesz);
+    if (buf == NULL) {
+        perror("failed to allocate buffer");
+        exit(1);
+    }
     
     fread(buf, 1, filesz, file);
 
@@ -37,14 +42,18 @@ signed main(int argc, char** argv) {
 
     while(entryHead < filesz) {
         char* entry = buf + entryHead;
-        int inodeNumber = ((int*) entry) [0];
-        short entryLen = ((short*) entry) [2];
+
+        int inodeNumber = le32toh(((int*) entry) [0]);
+        short entryLen = le16toh(((short*) entry) [2]);
         if (entryLen == 0) return 0;
         char nameLen = entry[6];
         char fileType = entry[7];
-        memcpy(entry, entry + 8, nameLen);
+
+        memcpy(entry, entry + 8, nameLen); //reuse read space
         entry[nameLen] = 0;
+        
         printf("%i %s - %s\n", inodeNumber, entry, types[fileType]);
+
         entryHead += entryLen;
     }
     fclose(file);

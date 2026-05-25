@@ -4,7 +4,7 @@
 #include <time.h>
 #include <unistd.h>
 
-ll readBytes = 0;
+static ll read_bytes = 0;
 
 void print_tree(struct inode* inode, struct block_tree* root, const struct ext2* fsData, int fs, char* buf) {
     if (root == NULL) {
@@ -21,7 +21,7 @@ void print_tree(struct inode* inode, struct block_tree* root, const struct ext2*
     if (root->block == 0) { //sparse file null block
         for (int i = 0; i < fsData->block_size; ++i) buf[i] = 0;
     } else {
-        int cnt = pread(fs, buf, fsData->block_size, (ll)root->block * fsData->block_size);
+        int cnt = pread_full(fs, buf, fsData->block_size, (ll)root->block * fsData->block_size);
         if (cnt < fsData->block_size) {
             perror("failed to read block ");
             fprintf(stderr, "%i", root->block);
@@ -30,22 +30,23 @@ void print_tree(struct inode* inode, struct block_tree* root, const struct ext2*
     }
 
     int writeSz = fsData->block_size;
-    if (readBytes >= inode->size) return;
-    if (readBytes + fsData->block_size >= inode->size) {
-        writeSz = inode->size - readBytes;
+    if (read_bytes >= inode->size) return;
+    if (read_bytes + fsData->block_size >= inode->size) {
+        writeSz = inode->size - read_bytes;
     }
 
-    int cnt = write(STDOUT_FILENO, buf, writeSz);
-    if (cnt != writeSz) {
+    int cnt = write_full(STDOUT_FILENO, buf, writeSz);
+    if (cnt < writeSz) {
         fprintf(stderr, "failed to write block %i of size %d", root->block, writeSz);
         exit(1);
     }
-    readBytes += writeSz;
+    read_bytes += writeSz;
 }
 
-signed main(int argc, char** argv) {
+int main(int argc, char** argv) {
     char* fsPath = argv[1];
     int inode = atoi(argv[2]);
+
     int fs = open(fsPath, O_RDONLY);
     if (fs < 0) {
         perror("unable to open file system");
@@ -57,24 +58,27 @@ signed main(int argc, char** argv) {
     struct block_tree root = get_block_tree(&metadata, fs, &fsData);
     
     char* buf = malloc(fsData.block_size);
+    if (buf == NULL)
+        alloc_error();
+    
     for (int i = 0; i < 15; ++i) {
         print_tree(&metadata, root.children[i], &fsData, fs, buf);
     }
 
-    if (readBytes < metadata.size) {
+    if (read_bytes < metadata.size) {
        for (int i = 0; i < fsData.block_size; ++i) buf[i] = 0;
     }
-    while (readBytes < metadata.size) {
+    while (read_bytes < metadata.size) {
         int writeSz = fsData.block_size;
-        if (readBytes + fsData.block_size >= metadata.size) {
-            writeSz = metadata.size - readBytes;
+        if (read_bytes + fsData.block_size >= metadata.size) {
+            writeSz = metadata.size - read_bytes;
         }
         int cnt = write(STDOUT_FILENO, buf, writeSz);
         if (cnt < 0) {
             fprintf(stderr, "failed to write block");\
             return 1;
         }
-        readBytes += cnt;
+        read_bytes += cnt;
     }
 
     for (int i = 0; i < 15; ++i) {
@@ -83,5 +87,6 @@ signed main(int argc, char** argv) {
     free(root.children);
     free(buf);
     close(fs);
+
     return 0;
 }
