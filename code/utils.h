@@ -195,6 +195,7 @@ void free_tree(struct block_tree* root, int blockSz) {
     free(root);
 }
 
+#if __BYTE_ORDER != __LITTLE_ENDIAN
 void fix_byte_order(struct inode* node) {
     if (node == NULL) return;
 
@@ -224,6 +225,7 @@ void fix_byte_order(struct inode* node) {
     node->acl       = le32toh(node->acl);
     node->size_high = le32toh(node->size_high);
 }
+#endif
 
 #define BLOCK_GROUP_CNT(d) (d.block_cnt / d.blocks_per_group)
 struct inode get_inode(int inode, int fs, struct ext2 fsData) {
@@ -250,8 +252,9 @@ struct inode get_inode(int inode, int fs, struct ext2 fsData) {
     struct inode res;
     memcpy(&res, inodeData, 112);
     free(inodeData);
-    if (__BYTE_ORDER != __LITTLE_ENDIAN)
+    #if __BYTE_ORDER != __LITTLE_ENDIAN
         fix_byte_order(&res);
+    #endif
 
     res.number = inode;
     res.blocks = res.sectors / (fsData.block_size >> 9);
